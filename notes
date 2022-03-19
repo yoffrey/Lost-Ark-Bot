@@ -1,5 +1,0 @@
--feedback messages (delete messages after it has been processed)
--indent names
--change order from 'cube t2' to 't2 cube'
--add or remove for other user
--ignore messages that dont start with a command
