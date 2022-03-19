@@ -5,115 +5,167 @@ import discord
 from dotenv import load_dotenv
 
 load_dotenv()
-TOKEN = os.getenv('TOKEN')
+bot = os.getenv('TOKEN')
 
-client = discord.Client()
+intents = discord.Intents.all()
+client = discord.Client(intents=intents)
 
-commandList = ['/add', '/del', '/check']
+verify = False
+commandList = ['/add', '/del', '/check', '/p']
 ticketList = ['plat', 'cube', 'map', 'boss']
 tierList = ['t1', 't2', 't3']
-
 userID = {}
 
-ticketsDict= {
-    'plat' : {},
-    'cube' : {'t1':{}, 't2':{}, 't3':{}},
-    'map' : {'t1':{}, 't2':{}, 't3':{}},
-    'boss' : {'t2':{}, 't3':{}}
+ticketsDict = {
+	'plat' : {},
+	'cube' : {'t1':{}, 't2':{}, 't3':{}},
+	'map' : {'t1':{}, 't2':{}, 't3':{}},
+	'boss' : {'t2':{}, 't3':{}}
 }
 
-def checkCount(ticketName, tier, count=4):
-    msg = ''
-    ticket = ticketsDict[ticketName]
-    if tier:
-        if len(ticket[tier]) >= count:
-            msg = 'Awakened Arkers with {} {} tickets\n'.format(tier, ticketName)
-            for user in ticket[tier]:
-                if len(ticket[tier]) < 4:
-                    msg += '{}\n'.format(user)
-                else:
-                    msg += '<@{}>\n'.format(userID[user])
-    else:
-        if len(ticket) >= count:
-            msg = 'Awakened Arkers with {} tickets\n'.format(ticketName)
-            for user in ticket:
-                if len(ticket) < 4:
-                    msg += '{}\n'.format(user)
-                else:
-                    msg += '<@{}>\n'.format(userID[user])
-    return msg
+def pingUser(ticketName, tier):
+	ticket = ticketsDict[ticketName]
+	if tier:
+		msg = 'Awakened Arkers with {} {} tickets\n'.format(tier, ticketName)
+		for user in ticket[tier]:
+			msg += '- <@{}> : {}\n'.format(userID[user], str(ticket[tier][user]))
+	else:
+		msg = 'Awakened Arkers with {} tickets\n'.format(ticketName)
+		for user in ticket:
+			msg += '- <@{}> : {}\n'.format(userID[user], str(ticket[user]))
+	return msg
 
-def addTicket(ticketName, name, tier=''):
-    ticket = ticketsDict[ticketName]
-    if tier:
-        if tier not in tierList:
-            return
-        #add case not plat
-        if name not in ticket[tier]:
-            ticket[tier][name] = 1
-        else:
-            ticket[tier][name] += 1
-    else:
-        #add case plat
-        if name not in ticket:
-            ticket[name] = 1
-        else:
-            ticket[name] += 1
-    return checkCount(ticketName, tier)
+def checkCount(ticketName, tier):
+	ticket = ticketsDict[ticketName]
+	if tier:
+		msg = 'Awakened Arkers with {} {} tickets\n'.format(tier, ticketName)
+		for user in ticket[tier]:
+				msg += '- {} : {}\n'.format(user, str(ticket[tier][user]))            
+	else:
+		msg = 'Awakened Arkers with {} tickets\n'.format(ticketName)
+		for user in ticket:
+			msg += '- {} : {}\n'.format(user, str(ticket[user]))
+	return msg
 
-def delTicket(ticketName, name, tier=''):
-    ticket = ticketsDict[ticketName]
-    if tier:
-        if tier not in tierList:
-            return
-        #add case not plat
-        if name in ticket[tier]:
-            ticket[tier][name] -= 1
-        if ticket[tier][name] == 0:
-            del ticket[tier][name]
-    else:
-        #add case plat
-        if name in ticket:
-            ticket[name] -= 1 
-        if ticket[name] == 0:
-            del ticket[name]
-        
+def addTicket(ticketName, name, ticketAmount, tier=''):
+	ticket = ticketsDict[ticketName]
+	if tier:
+		if tier not in tierList:
+			return
+		#add case not plat
+		if name not in ticket[tier]:
+			ticket[tier][name] = ticketAmount
+		else:
+			ticket[tier][name] += ticketAmount
+	else:
+		#add case plat
+		if name not in ticket:
+			ticket[name] = ticketAmount
+		else:
+			ticket[name] += ticketAmount
+	return checkCount(ticketName, tier)
+
+def delTicket(ticketName, name, ticketAmount, tier=''):
+	ticket = ticketsDict[ticketName]
+	if tier:
+		if tier not in tierList:
+			return
+		#add case not plat
+		if name in ticket[tier]:
+			ticket[tier][name] -= ticketAmount
+		if ticket[tier][name] == 0:
+			del ticket[tier][name]
+	else:
+		#add case plat
+		if name in ticket:
+			ticket[name] -= ticketAmount
+		if ticket[name] == 0:
+			del ticket[name]
+
 @client.event
 async def on_ready():
-    print ('Lost Ark bot is now running!')
+	print ('Lost Ark bot is now running!\n')
+    
+	#Get user data for all Lost Ark role/admin
+	#for member with lostark role or admin
+	#populate the userID dict
+	for guild in client.guilds:
+		for member in guild.members: 
+			userID[member.name] = member.id
+
+	file = open('users.txt', 'w')
+	file.write(str(userID))
+	file.close
 
 @client.event
 async def on_message(message):
-    if message.author == client.user:
-        return
+	if message.author == client.user:
+		return
+	
+	#Split message, get and store name in a dictionary with userID
+	contentTokens= message.content.split()
+	name = message.author.name
+	userID[name] = message.author.id
+	if contentTokens[-1].isdigit():
+		ticketAmount = int(contentTokens[-1])
+		del contentTokens[-1]
+	else:
+		ticketAmount = 1
+	#assign variables    
+	if contentTokens[0] not in commandList:
+		return
+	command = contentTokens[0]
+	if contentTokens[-1].lower() in str(userID.keys()).lower():
+		userIDList = list(userID)
+		userIDListLower = [x.lower() for x in userID.keys()]
+		#if lowercase matches, name = the one stored in userID for case
+		name = userIDList[userIDListLower.index(contentTokens[-1].lower())]
+		if contentTokens[-2] in ticketList:
+			ticketName = contentTokens[-2]
+			if contentTokens[-3] in tierList:
+				tier = contentTokens[-3]
+			else:
+				tier = ''
+		else:
+			return
+	elif contentTokens[-1] in ticketList:
+		ticketName = contentTokens[-1]
+		if contentTokens[-2] in tierList:
+			tier = contentTokens[-2]
+		else:
+			tier = ''
+	else:
+		return
+	#if ticket is plat and has a tier then return
+	if (ticketName == 'plat') and tier:
+		return
 
-    contentTokens= message.content.split()
-    name = message.author.name
+    #Process the command
+	msg = ''
+	if ticketName == 'plat':
+		tier = None 
+	if command == '/add':
+		msg = addTicket(ticketName, name, ticketAmount, tier)
+	if command == '/del':
+		delTicket(ticketName, name, ticketAmount, tier)
+	if command == '/check':
+		msg = checkCount(ticketName, tier)
+	if command == '/p':
+		msg = pingUser(ticketName, tier)
+        
+    #Verify the message was processed by reacting to it    
+	verify = True
+	if verify:
+		emoji = '\U0001F3AB'
+		await message.add_reaction(emoji)
+		verify = False
 
-    userID[name] = message.author.id
-    
-    if len(contentTokens) > 3:
-        return
+	if msg:
+		await message.channel.send(msg)
 
-    command = contentTokens[0] 
-    ticketName = contentTokens[1] 
-    
-    if not (command in commandList and ticketName in ticketList):
-        return
+    #save dict to a text file
+	file = open('log.txt', 'w')
+	file.write(str(ticketsDict))
+	file.close
 
-    msg = ''
-    tier = None if ticketName == 'plat' else contentTokens[2]
-    if command == '/add':
-        msg = addTicket(ticketName, name, tier)
-    
-    if command == '/del':
-        delTicket(ticketName, name, tier)
-
-    if command == '/check':
-        print(tier)
-        msg = checkCount(ticketName, tier, count=0)
-    
-    if msg:
-        await message.channel.send(msg)
-
-client.run(TOKEN)
+client.run(bot)
